@@ -152,7 +152,7 @@ ol.reper .grow{flex:1;min-width:0;font-weight:600}
 
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(84px + env(safe-area-inset-bottom,0px));z-index:40;background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;font-weight:600;font-size:.9rem;max-width:calc(100% - 32px)}
 @media (max-width:440px){.two{grid-template-columns:1fr}}
-@media (prefers-reduced-motion:no-preference){.sheet{animation:up .18s ease-out}@keyframes up{from{transform:translateY(12px);opacity:.6}}}
+@media (prefers-reduced-motion:no-preference){.sheet:not(.still){animation:up .18s ease-out}@keyframes up{from{transform:translateY(12px);opacity:.6}}}
 </style>
 </head>
 <body>
@@ -278,7 +278,10 @@ function render(skipSheet){
   if(S.canWrite&&S.status==="ready"&&!Object.keys(S.services).length&&!Object.keys(S.members).length&&!Object.keys(S.songs).length)
     h+='<div class="notice">La base de datos está vacía. <button class="btn primary" style="margin-top:8px;display:block" data-act="seed">Cargar equipo y cronograma de noviembre</button></div>';
   if(S.tab==="services")h+=viewServices();else if(S.tab==="songs")h+=viewSongs();else h+=viewMembers();
+  const y=window.scrollY,pastOpen=!!$("#main details.past")?.open;
   $("#main").innerHTML=h;
+  if(pastOpen){const p=$("#main details.past");if(p)p.open=true}
+  if(!render._top)window.scrollTo(0,y);render._top=false;
   const au=$("#auth");au.textContent=S.user?(S.canWrite?"Salir":"Salir ("+S.user.email+")"):"Entrar";au.hidden=S.status==="config";
   if(S.tab==="songs"){const i=$("#q");if(i&&render._focusQ){i.focus();i.setSelectionRange(i.value.length,i.value.length)}}
   if(!skipSheet)renderSheet();
@@ -329,16 +332,20 @@ function renderSheet(){
   const root=$("#sheet-root");const sh=top();
   if(!sh){root.innerHTML="";document.body.style.overflow="";return}
   document.body.style.overflow="hidden";
-  const keepScroll=root.firstElementChild&&root.firstElementChild.dataset.k===sh.k?root.firstElementChild.scrollTop:0;
+  const prev=root.firstElementChild,same=!!(prev&&prev.dataset.k===String(sh.k));
+  if(same)sh.scroll=prev.scrollTop;
   let title="",right="",body="";
   if(sh.type==="service")[title,right,body]=sheetService(sh);
   else if(sh.type==="song")[title,right,body]=sheetSong(sh);
   else if(sh.type==="serviceEdit")[title,right,body]=sheetServiceEdit(sh);
   else if(sh.type==="songEdit")[title,right,body]=sheetSongEdit(sh);
   else if(sh.type==="memberEdit")[title,right,body]=sheetMemberEdit(sh);
-  root.innerHTML='<div class="sheet" data-k="'+sh.k+'" role="dialog" aria-label="'+esc(title)+'"><div class="sheet-head"><div class="wrap"><button class="icon-btn" data-act="back" aria-label="Volver">← Volver</button><h2>'+esc(title)+'</h2>'+right+'</div></div><div class="wrap sheet-body">'+body+'</div></div>';
-  root.firstElementChild.scrollTop=keepScroll;
+  root.innerHTML='<div class="sheet'+(same||sh.seen?' still':'')+'" data-k="'+sh.k+'" role="dialog" aria-label="'+esc(title)+'"><div class="sheet-head"><div class="wrap"><button class="icon-btn" data-act="back" aria-label="Volver">← Volver</button><h2>'+esc(title)+'</h2>'+right+'</div></div><div class="wrap sheet-body">'+body+'</div></div>';
+  sh.seen=true;
+  root.firstElementChild.scrollTop=sh.scroll||0;
 }
+/* recordar dónde va cada hoja para volver al mismo punto */
+document.addEventListener("scroll",e=>{const t=e.target;if(t&&t.classList&&t.classList.contains("sheet")){const s=top();if(s&&String(s.k)===t.dataset.k)s.scroll=t.scrollTop}},true);
 function sheetService(sh){
   const s=S.services[sh.id];if(!s)return ["Servicio","",'<div class="empty">Este servicio ya no existe.</div>'];
   const right=S.canWrite?'<button class="icon-btn" data-act="editService" data-id="'+sh.id+'">Editar</button>':"";
@@ -446,7 +453,7 @@ async function write(fn,okMsg,popCount){
 }
 const clean=o=>JSON.parse(JSON.stringify(o));
 const A={
-  tab(el){S.tab=el.dataset.v;try{localStorage.setItem("alab-tab",S.tab)}catch(e){}render()},
+  tab(el){S.tab=el.dataset.v;try{localStorage.setItem("alab-tab",S.tab)}catch(e){}render._top=true;render();window.scrollTo(0,0)},
   notation(el){S.notation=el.dataset.v;try{localStorage.setItem("alab-notation",S.notation)}catch(e){}render()},
   back(){pop()},
   fab(){
