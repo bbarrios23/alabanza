@@ -121,6 +121,13 @@ ol.reper .grow{flex:1;min-width:0;font-weight:600}
 .inline{display:flex;gap:8px;align-items:center}
 .inline select{flex:1;min-width:0}
 .inline select.k{flex:0 0 92px}
+.song-item{display:flex;flex-direction:column;gap:6px;border:1px solid var(--line);border-radius:12px;padding:10px;background:var(--bg)}
+.song-item .remember{display:flex;align-items:center;gap:6px;font-size:.8rem;font-weight:500;color:var(--muted);letter-spacing:0}
+.song-item .remember input{width:auto;padding:0}
+.keys-list{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.keys-list button{display:inline-flex;align-items:center;gap:6px;background:var(--chip);border:1px solid transparent;border-radius:999px;padding:2px 4px 2px 10px;font-size:.8rem}
+.keys-list button[aria-pressed="true"]{border-color:var(--accent)}
+.singer-tag{color:var(--muted);font-weight:400;font-size:.85rem}
 .mini{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:8px 10px;line-height:1;min-width:36px}
 .add{align-self:flex-start;background:none;border:1px dashed var(--accent);color:var(--accent);border-radius:10px;padding:8px 14px;font-weight:600}
 .actions{display:flex;gap:10px;flex-wrap:wrap;justify-content:space-between}
@@ -229,6 +236,8 @@ function shiftKey(k,st){const p=keyParts(k);if(!p)return k;const flatsPref=FLAT_
   const cand=p.minor?r+"m":r;const alt=shiftNote(p.root,st,true)+(p.minor?"m":"");
   return ALL_KEYS.includes(alt)&&!ALL_KEYS.includes(cand)?alt:(ALL_KEYS.includes(cand)?cand:alt)}
 function showKey(k){if(!k)return "—";const p=keyParts(k);if(!p)return k;let r=p.root;if(S.notation==="la")r=latin(r);return r+(p.minor?"m":"")}
+/* tono guardado de una persona para una canción (o el original) */
+function keyFor(songId,singer){const s=S.songs[songId];if(!s)return "G";return (singer&&s.keys&&s.keys[singer])||s.key||"G"}
 function renderChart(body,st,targetKey){
   const flats=FLAT_KEYS.has(targetKey);
   return (body||"").split("\n").map(raw=>{
@@ -339,7 +348,7 @@ function sheetService(sh){
   const mus=(s.musicians||[]).filter(m=>m.role);
   b+='<div class="block"><h4>Banda</h4>'+(mus.length?mus.map(m=>'<div class="band-row"><span>'+esc(m.role)+'</span><span>'+esc(m.memberId?mName(m.memberId):"Sin asignar")+'</span></div>').join(""):'<span class="meta">Nadie asignado todavía</span>')+'</div>';
   const songs=(s.songs||[]).filter(x=>S.songs[x.songId]);
-  b+='<div class="block"><h4>Repertorio</h4>'+(songs.length?'<ol class="reper">'+songs.map(x=>'<li><button data-act="openSong" data-id="'+x.songId+'" data-key="'+esc(x.key||"")+'"><span class="grow">'+esc(S.songs[x.songId].title)+'</span><span class="key">'+esc(showKey(x.key||S.songs[x.songId].key))+'</span></button></li>').join("")+'</ol>':'<span class="meta">Sin canciones elegidas</span>')+'</div>';
+  b+='<div class="block"><h4>Repertorio</h4>'+(songs.length?'<ol class="reper">'+songs.map(x=>'<li><button data-act="openSong" data-id="'+x.songId+'" data-key="'+esc(x.key||"")+'"><span class="grow">'+esc(S.songs[x.songId].title)+(x.singer?' <span class="singer-tag">· '+esc(mName(x.singer))+'</span>':'')+'</span><span class="key">'+esc(showKey(x.key||S.songs[x.songId].key))+'</span></button></li>').join("")+'</ol>':'<span class="meta">Sin canciones elegidas</span>')+'</div>';
   if(s.notes)b+='<div class="block"><h4>Notas</h4><div style="white-space:pre-wrap">'+esc(s.notes)+'</div></div>';
   return [s.type||"Servicio",right,b];
 }
@@ -349,6 +358,8 @@ function sheetSong(sh){
   const target=sh.key||s.key;const st=diff(s.key,target);
   const rel=((st+6)%12)-6;
   let b='<div><div class="meta">'+esc(s.author||"Autor sin registrar")+(s.bpm?" · "+esc(s.bpm)+" BPM":"")+' · Tono original <span class="key">'+esc(showKey(s.key))+'</span></div></div>';
+  const pk=Object.entries(s.keys||{}).filter(([id,k])=>k).sort((a,b)=>mName(a[0]).localeCompare(mName(b[0]),"es"));
+  if(pk.length)b+='<div class="keys-list"><span class="meta">Tonos:</span>'+pk.map(([id,k])=>'<button data-act="trTo" data-v="'+esc(k)+'" aria-pressed="'+(k===target)+'">'+esc(mName(id))+' <span class="key">'+esc(showKey(k))+'</span></button>').join("")+'</div>';
   b+='<div class="tools"><div class="transpose" aria-label="Transponer"><button class="mini" data-act="tr" data-v="-1" aria-label="Bajar medio tono">−</button><span class="now">'+esc(showKey(target))+(rel?' <small>('+(rel>0?"+":"")+rel+')</small>':"")+'</span><button class="mini" data-act="tr" data-v="1" aria-label="Subir medio tono">+</button>'+(st?'<button class="mini" data-act="tr" data-v="0">Original</button>':"")+'</div>'+
     '<div class="transpose"><button class="mini" data-act="fs" data-v="-1" aria-label="Letra más pequeña">A−</button><button class="mini" data-act="fs" data-v="1" aria-label="Letra más grande">A+</button></div></div>';
   b+='<div class="chart" style="--fs:'+(sh.fs||16)+'px">'+(s.body?renderChart(s.body,st,target):'<span class="meta">Esta canción aún no tiene letra ni acordes.</span>')+'</div>';
@@ -360,6 +371,13 @@ function memberOpts(sel,filter,date){
   const rest=filter?all.filter(m=>!(m.roles||[]).includes(filter)):all;
   const o=m=>'<option value="'+m.id+'"'+(m.id===sel?" selected":"")+'>'+esc(m.name)+(isOff(m.id,date)?" (no disponible)":"")+'</option>';
   return '<option value="">Sin asignar</option>'+(pri.length?'<optgroup label="Toca '+esc(filter)+'">'+pri.map(o).join("")+'</optgroup><optgroup label="Otros">'+rest.map(o).join("")+'</optgroup>':rest.map(o).join(""));
+}
+function singerOpts(sel,d){
+  const all=sorted(S.members,(a,b)=>(a.name||"").localeCompare(b.name||"","es"));
+  const inSvc=new Set([d.leader,...d.singers].filter(Boolean));
+  const pri=all.filter(m=>inSvc.has(m.id)),rest=all.filter(m=>!inSvc.has(m.id));
+  const o=m=>'<option value="'+m.id+'"'+(m.id===sel?" selected":"")+'>'+esc(m.name)+'</option>';
+  return '<option value="">¿Quién la canta?</option>'+(pri.length?'<optgroup label="En este servicio">'+pri.map(o).join("")+'</optgroup><optgroup label="Otros">'+rest.map(o).join("")+'</optgroup>':rest.map(o).join(""));
 }
 function keyOpts(sel){return ALL_KEYS.map(k=>'<option value="'+k+'"'+(k===sel?" selected":"")+'>'+esc(showKey(k))+'</option>').join("")}
 function sheetServiceEdit(sh){
@@ -375,7 +393,13 @@ function sheetServiceEdit(sh){
   b+='<div class="field"><span class="lbl">Voces</span><div class="toggle-chips">'+[...voices,...others].map(m=>'<label'+(isOff(m.id,d.date)?' class="off"':'')+'><input type="checkbox" data-singer="'+m.id+'"'+(d.singers.includes(m.id)?" checked":"")+'>'+esc(m.name)+(isOff(m.id,d.date)?' · no disponible':'')+'</label>').join("")+(all.length?"":'<span class="hint">Sin integrantes</span>')+'</div></div>';
   b+='<div class="field"><span class="lbl">Banda</span>'+d.musicians.map((m,i)=>'<div class="inline"><select data-mus-role="'+i+'" aria-label="Instrumento">'+ROLES_BAND.map(r=>'<option'+(r===m.role?" selected":"")+'>'+r+'</option>').join("")+'</select><select data-mus-member="'+i+'" aria-label="Quién toca">'+memberOpts(m.memberId,m.role,d.date)+'</select><button class="mini" data-act="musDel" data-i="'+i+'" aria-label="Quitar">✕</button></div>').join("")+'<button class="add" data-act="musAdd">+ Agregar instrumento</button></div>';
   const songs=sorted(S.songs,(a,b)=>(a.title||"").localeCompare(b.title||"","es"));
-  b+='<div class="field"><span class="lbl">Repertorio (en orden)</span>'+d.songs.map((x,i)=>'<div class="inline"><select data-song-id="'+i+'" aria-label="Canción">'+songs.map(s=>'<option value="'+s.id+'"'+(s.id===x.songId?" selected":"")+'>'+esc(s.title)+'</option>').join("")+'</select><select class="k" data-song-key="'+i+'" aria-label="Tono">'+keyOpts(x.key)+'</select><button class="mini" data-act="songUp" data-i="'+i+'" aria-label="Subir">↑</button><button class="mini" data-act="songDel" data-i="'+i+'" aria-label="Quitar">✕</button></div>').join("")+
+  b+='<div class="field"><span class="lbl">Repertorio (en orden)</span>'+d.songs.map((x,i)=>{
+      const saved=x.singer&&S.songs[x.songId]?.keys?.[x.singer];
+      const nm=x.singer?mName(x.singer):"",orig=S.songs[x.songId]?.key;
+      const hint=!x.singer?'':saved===x.key?'Es el tono guardado de '+nm+'.':x.remember!==false&&(saved||x.key!==orig)?'Al guardar, '+showKey(x.key)+' quedará como el tono de '+nm+'.':saved?'Su tono guardado es '+showKey(saved)+'; este cambio es solo para este culto.':x.key!==orig?'Solo para este culto; no se guardará como tono de '+nm+'.':'Sin tono guardado para '+nm+'; se usa el original.';
+      return '<div class="song-item"><div class="inline"><select data-song-id="'+i+'" aria-label="Canción">'+songs.map(s=>'<option value="'+s.id+'"'+(s.id===x.songId?" selected":"")+'>'+esc(s.title)+'</option>').join("")+'</select><button class="mini" data-act="songUp" data-i="'+i+'" aria-label="Subir">↑</button><button class="mini" data-act="songDel" data-i="'+i+'" aria-label="Quitar">✕</button></div>'+
+      '<div class="inline"><select data-song-singer="'+i+'" aria-label="Quién la canta">'+singerOpts(x.singer,d)+'</select><select class="k" data-song-key="'+i+'" aria-label="Tono">'+keyOpts(x.key)+'</select></div>'+
+      (x.singer?'<label class="remember"><input type="checkbox" data-song-remember="'+i+'"'+(x.remember!==false?" checked":"")+'>Recordar este tono para '+esc(mName(x.singer))+'</label><span class="hint">'+esc(hint)+'</span>':'')+'</div>'}).join("")+
     (songs.length?'<button class="add" data-act="songAdd">+ Agregar canción</button>':'<span class="hint">Agrega canciones al Cancionero para elegirlas aquí.</span>')+'</div>';
   b+='<div class="field"><label for="f-notes">Notas</label><textarea id="f-notes" data-f="notes" style="min-height:90px;font-family:var(--f-body)">'+esc(d.notes)+'</textarea></div>';
   b+=actionsHtml(sh,"saveService","delService");
@@ -386,6 +410,9 @@ function sheetSongEdit(sh){
   let b='<div class="field"><label for="f-title">Título</label><input id="f-title" data-f="title" value="'+esc(d.title)+'"></div>';
   b+='<div class="field"><label for="f-author">Autor o intérprete</label><input id="f-author" data-f="author" value="'+esc(d.author)+'"></div>';
   b+='<div class="two"><div class="field"><label for="f-key">Tono original</label><select id="f-key" data-f="key">'+keyOpts(d.key)+'</select></div><div class="field"><label for="f-bpm">Tempo (BPM)</label><input id="f-bpm" type="number" inputmode="numeric" min="30" max="240" data-f="bpm" value="'+esc(d.bpm)+'"></div></div>';
+  const mem=sorted(S.members,(a,b)=>(a.name||"").localeCompare(b.name||"","es"));
+  b+='<div class="field"><span class="lbl">Tono de cada persona</span>'+d.keys.map((x,i)=>'<div class="inline"><select data-sk-member="'+i+'" aria-label="Persona"><option value="">Elige persona</option>'+mem.map(m=>'<option value="'+m.id+'"'+(m.id===x.memberId?" selected":"")+'>'+esc(m.name)+'</option>').join("")+'</select><select class="k" data-sk-key="'+i+'" aria-label="Tono">'+keyOpts(x.key)+'</select><button class="mini" data-act="skDel" data-i="'+i+'" aria-label="Quitar">✕</button></div>').join("")+
+    '<button class="add" data-act="skAdd">+ Agregar tono de una persona</button><span class="hint">También se guardan solos cuando eliges la canción para alguien en un servicio.</span></div>';
   b+='<div class="field"><label for="f-body">Letra y acordes</label><textarea id="f-body" data-f="body" spellcheck="false">'+esc(d.body)+'</textarea><span class="hint">Pon cada acorde entre corchetes justo antes de la sílaba donde cambia: [G]Te ala[D]baré. Una línea que termina en dos puntos, como “Coro:”, se muestra como título de sección.</span></div>';
   b+=actionsHtml(sh,"saveSong","delSong");
   return [sh.id?"Editar canción":"Nueva canción","",b];
@@ -424,28 +451,36 @@ const A={
   back(){pop()},
   fab(){
     if(S.tab==="services")push({type:"serviceEdit",id:null,draft:{date:todayStr(),time:"09:00",type:"Culto dominical",leader:"",singers:[],musicians:[{role:"Piano",memberId:""},{role:"Batería",memberId:""},{role:"Audiovisuales",memberId:""}],songs:[],notes:""}});
-    else if(S.tab==="songs")push({type:"songEdit",id:null,draft:{title:"",author:"",key:"G",bpm:"",body:""}});
+    else if(S.tab==="songs")push({type:"songEdit",id:null,draft:{title:"",author:"",key:"G",bpm:"",body:"",keys:[]}});
     else push({type:"memberEdit",id:null,draft:{name:"",roles:[],note:"",unavailable:[]}});
   },
   openService(el){push({type:"service",id:el.dataset.id})},
   openSong(el){push({type:"song",id:el.dataset.id,key:el.dataset.key||S.songs[el.dataset.id]?.key,fs:16})},
-  editService(el){const s=S.services[el.dataset.id];push({type:"serviceEdit",id:el.dataset.id,draft:clean({date:s.date||"",time:s.time||"",type:s.type||"",leader:s.leader||"",singers:s.singers||[],musicians:s.musicians||[],songs:s.songs||[],notes:s.notes||""})})},
-  editSong(el){const s=S.songs[el.dataset.id];push({type:"songEdit",id:el.dataset.id,draft:clean({title:s.title||"",author:s.author||"",key:s.key||"G",bpm:s.bpm||"",body:s.body||""})})},
+  editService(el){const s=S.services[el.dataset.id];const d=clean({date:s.date||"",time:s.time||"",type:s.type||"",leader:s.leader||"",singers:s.singers||[],musicians:s.musicians||[],songs:s.songs||[],notes:s.notes||""});
+    d.songs.forEach(x=>{if(x.singer===undefined)x.singer=d.leader||"";if(!x.key)x.key=keyFor(x.songId,x.singer);x.remember=true});
+    push({type:"serviceEdit",id:el.dataset.id,draft:d})},
+  editSong(el){const s=S.songs[el.dataset.id];push({type:"songEdit",id:el.dataset.id,draft:clean({title:s.title||"",author:s.author||"",key:s.key||"G",bpm:s.bpm||"",body:s.body||"",keys:Object.entries(s.keys||{}).map(([memberId,key])=>({memberId,key}))})})},
+  trTo(el){const sh=top();sh.key=el.dataset.v;renderSheet()},
+  skAdd(){top().draft.keys.push({memberId:"",key:top().draft.key||"G"});renderSheet()},
+  skDel(el){top().draft.keys.splice(+el.dataset.i,1);renderSheet()},
   editMember(el){const m=S.members[el.dataset.id];push({type:"memberEdit",id:el.dataset.id,draft:clean({name:m.name||"",roles:m.roles||[],note:m.note||"",unavailable:m.unavailable||[]})})},
   tr(el){const sh=top(),s=S.songs[sh.id];const v=+el.dataset.v;sh.key=v===0?s.key:shiftKey(sh.key||s.key,v);renderSheet()},
   fs(el){const sh=top();sh.fs=Math.min(26,Math.max(12,(sh.fs||16)+2*+el.dataset.v));renderSheet()},
   musAdd(){const d=top().draft;d.musicians.push({role:ROLES_BAND.find(r=>!d.musicians.some(m=>m.role===r))||ROLES_BAND[0],memberId:""});renderSheet()},
   musDel(el){top().draft.musicians.splice(+el.dataset.i,1);renderSheet()},
-  songAdd(){const d=top().draft;const used=new Set(d.songs.map(x=>x.songId));const s=sorted(S.songs,(a,b)=>(a.title||"").localeCompare(b.title||"","es"));const pick=s.find(x=>!used.has(x.id))||s[0];if(pick)d.songs.push({songId:pick.id,key:pick.key||"G"});renderSheet()},
+  songAdd(){const d=top().draft;const used=new Set(d.songs.map(x=>x.songId));const s=sorted(S.songs,(a,b)=>(a.title||"").localeCompare(b.title||"","es"));const pick=s.find(x=>!used.has(x.id))||s[0];const singer=d.leader||(d.singers.length===1?d.singers[0]:"");if(pick)d.songs.push({songId:pick.id,singer,key:keyFor(pick.id,singer),remember:true});renderSheet()},
   offAdd(){const v=$("#f-off")?.value;if(!v){toast("Elige una fecha");return}const d=top().draft;if(!d.unavailable.includes(v))d.unavailable.push(v);renderSheet()},
   offDel(el){const d=top().draft;d.unavailable=d.unavailable.filter(x=>x!==el.dataset.v);renderSheet()},
   songDel(el){top().draft.songs.splice(+el.dataset.i,1);renderSheet()},
   songUp(el){const d=top().draft,i=+el.dataset.i;if(i>0){[d.songs[i-1],d.songs[i]]=[d.songs[i],d.songs[i-1]];renderSheet()}},
   saveService(){const sh=top(),d=sh.draft;if(!d.date){toast("Elige una fecha");return}
-    const data=clean({...d,type:d.type.trim()||"Servicio",musicians:d.musicians.filter(m=>m.role),updatedAt:new Date().toISOString()});
-    write(()=>S.db.collection("services").doc(sh.id||newId()).set(data),"Servicio guardado")},
+    const data=clean({...d,type:d.type.trim()||"Servicio",musicians:d.musicians.filter(m=>m.role),songs:d.songs.map(x=>({songId:x.songId,key:x.key,singer:x.singer||""})),updatedAt:new Date().toISOString()});
+    const learn={};for(const x of d.songs)if(x.singer&&x.remember!==false&&x.key&&S.songs[x.songId]&&S.songs[x.songId].keys?.[x.singer]!==x.key)(learn[x.songId]=learn[x.songId]||{})["keys."+x.singer]=x.key;
+    const n=Object.keys(learn).length;
+    write(()=>{const b=S.db.batch();b.set(S.db.collection("services").doc(sh.id||newId()),data);for(const [id,u] of Object.entries(learn))b.update(S.db.collection("songs").doc(id),u);return b.commit()},n?"Servicio guardado · tonos recordados":"Servicio guardado")},
   saveSong(){const sh=top(),d=sh.draft;if(!d.title.trim()){toast("Escribe el título de la canción");return}
-    const data=clean({...d,title:d.title.trim(),author:d.author.trim(),updatedAt:new Date().toISOString()});
+    const keys={};for(const x of d.keys)if(x.memberId&&x.key)keys[x.memberId]=x.key;
+    const data=clean({...d,keys,title:d.title.trim(),author:d.author.trim(),updatedAt:new Date().toISOString()});
     write(()=>S.db.collection("songs").doc(sh.id||newId()).set(data),"Canción guardada")},
   saveMember(){const sh=top(),d=sh.draft;if(!d.name.trim()){toast("Escribe el nombre");return}
     const data=clean({...d,name:d.name.trim(),note:d.note.trim()});
@@ -469,13 +504,17 @@ document.addEventListener("input",e=>{
 });
 document.addEventListener("change",e=>{
   const t=e.target,sh=top();if(!sh||!sh.draft)return;const d=sh.draft;
-  if(t.dataset.singer){const id=t.dataset.singer;d.singers=t.checked?[...new Set([...d.singers,id])]:d.singers.filter(x=>x!==id)}
+  if(t.dataset.singer){const id=t.dataset.singer;d.singers=t.checked?[...new Set([...d.singers,id])]:d.singers.filter(x=>x!==id);if(d.songs.length)renderSheet()}
   else if(t.dataset.role){const r=t.dataset.role;d.roles=t.checked?[...new Set([...d.roles,r])]:d.roles.filter(x=>x!==r)}
   else if(t.dataset.musRole!==undefined){d.musicians[+t.dataset.musRole].role=t.value;renderSheet()}
   else if(t.dataset.musMember!==undefined){d.musicians[+t.dataset.musMember].memberId=t.value}
-  else if(t.dataset.songId!==undefined){const x=d.songs[+t.dataset.songId];x.songId=t.value;x.key=S.songs[t.value]?.key||x.key;renderSheet()}
-  else if(t.dataset.songKey!==undefined){d.songs[+t.dataset.songKey].key=t.value}
-  else if(t.dataset.f){d[t.dataset.f]=t.value;if(t.dataset.f==="date"&&sh.type==="serviceEdit")renderSheet()}
+  else if(t.dataset.songId!==undefined){const x=d.songs[+t.dataset.songId];x.songId=t.value;x.key=keyFor(t.value,x.singer);renderSheet()}
+  else if(t.dataset.songSinger!==undefined){const x=d.songs[+t.dataset.songSinger];x.singer=t.value;x.key=keyFor(x.songId,x.singer);renderSheet()}
+  else if(t.dataset.songKey!==undefined){d.songs[+t.dataset.songKey].key=t.value;renderSheet()}
+  else if(t.dataset.songRemember!==undefined){d.songs[+t.dataset.songRemember].remember=t.checked;renderSheet()}
+  else if(t.dataset.skMember!==undefined){d.keys[+t.dataset.skMember].memberId=t.value}
+  else if(t.dataset.skKey!==undefined){d.keys[+t.dataset.skKey].key=t.value}
+  else if(t.dataset.f){d[t.dataset.f]=t.value;if((t.dataset.f==="date"||t.dataset.f==="leader")&&sh.type==="serviceEdit")renderSheet()}
 });
 document.addEventListener("keydown",e=>{if(e.key==="Escape"&&S.stack.length)pop()});
 
