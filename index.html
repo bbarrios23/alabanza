@@ -128,6 +128,21 @@ ol.reper .grow{flex:1;min-width:0;font-weight:600}
 .keys-list button{display:inline-flex;align-items:center;gap:6px;background:var(--chip);border:1px solid transparent;border-radius:999px;padding:2px 4px 2px 10px;font-size:.8rem}
 .keys-list button[aria-pressed="true"]{border-color:var(--accent)}
 .singer-tag{color:var(--muted);font-weight:400;font-size:.85rem}
+.filters{display:flex;flex-wrap:wrap;gap:6px}
+.filter{background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:6px 12px;font-size:.85rem;font-weight:600}
+.filter small{color:var(--muted);font-weight:500;margin-left:2px}
+.filter[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft)}
+.cat-tag{display:inline-block;font-size:.7rem;font-weight:700;letter-spacing:.03em;border-radius:6px;padding:0 6px;margin-right:6px;background:var(--chip);color:var(--ink)}
+.cat-tag[data-c="Alabanza"]{background:var(--accent-soft);color:var(--chord)}
+.cat-set{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.chart .ch.edit{cursor:pointer;border-radius:4px}
+.chart .ch.edit:hover{background:var(--accent-soft)}
+.chord-pop{position:fixed;left:0;right:0;bottom:0;z-index:40;background:var(--surface);border-top:1px solid var(--line);box-shadow:0 -8px 24px rgba(0,0,0,.18);padding:14px 16px calc(14px + env(safe-area-inset-bottom,0px))}
+.chord-pop .wrap{display:flex;flex-direction:column;gap:10px}
+.chord-pop input{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--bg);font-family:var(--f-mono);font-size:1.05rem}
+.chord-pop .sugg{display:flex;flex-wrap:wrap;gap:6px}
+.chord-pop .sugg button{font-family:var(--f-mono);font-weight:700;color:var(--chord);background:var(--accent-soft);border:0;border-radius:8px;padding:6px 10px}
+.chord-pop .row{display:flex;gap:8px;flex-wrap:wrap}
 .mini{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:8px 10px;line-height:1;min-width:36px}
 .add{align-self:flex-start;background:none;border:1px dashed var(--accent);color:var(--accent);border-radius:10px;padding:8px 14px;font-weight:600}
 .actions{display:flex;gap:10px;flex-wrap:wrap;justify-content:space-between}
@@ -150,7 +165,7 @@ ol.reper .grow{flex:1;min-width:0;font-weight:600}
 .line.blank{height:.9em}
 .sec{font-size:.72em;text-transform:uppercase;letter-spacing:.1em;font-weight:700;color:var(--muted);margin-top:.6em}
 
-.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(84px + env(safe-area-inset-bottom,0px));z-index:40;background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;font-weight:600;font-size:.9rem;max-width:calc(100% - 32px)}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(84px + env(safe-area-inset-bottom,0px));z-index:50;background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;font-weight:600;font-size:.9rem;max-width:calc(100% - 32px)}
 @media (max-width:440px){.two{grid-template-columns:1fr}}
 @media (prefers-reduced-motion:no-preference){.sheet:not(.still){animation:up .18s ease-out}@keyframes up{from{transform:translateY(12px);opacity:.6}}}
 </style>
@@ -174,6 +189,7 @@ ol.reper .grow{flex:1;min-width:0;font-weight:600}
 <main><div class="wrap" id="main"></div></main>
 <button class="fab" id="fab" data-act="fab" hidden>+ Nuevo</button>
 <div id="sheet-root"></div>
+<div id="pop-root"></div>
 <div class="toast" id="toast" hidden></div>
 
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
@@ -211,8 +227,8 @@ const MONTHS_L=["enero","febrero","marzo","abril","mayo","junio","julio","agosto
 const WD=["dom","lun","mar","mié","jue","vie","sáb"];
 const WD_L=["Domingo","Lunes","Martes","Miércoles","Jueves","Viernes","Sábado"];
 
-const S={tab:"services",songs:{},members:{},services:{},db:null,user:null,canWrite:false,status:"loading",notation:"us",stack:[],q:"",status:"loading"};
-try{const n=localStorage.getItem("alab-notation");if(n==="la"||n==="us")S.notation=n;const t=localStorage.getItem("alab-tab");if(t)S.tab=t}catch(e){}
+const S={tab:"services",songs:{},members:{},services:{},db:null,user:null,canWrite:false,status:"loading",notation:"us",stack:[],q:"",cat:"",pop:null,status:"loading"};
+try{const n=localStorage.getItem("alab-notation");if(n==="la"||n==="us")S.notation=n;const t=localStorage.getItem("alab-tab");if(t)S.tab=t;const c=localStorage.getItem("alab-cat");if(c)S.cat=c}catch(e){}
 
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -240,8 +256,43 @@ function showKey(k){if(!k)return "—";const p=keyParts(k);if(!p)return k;let r=
 function keyFor(songId,singer){const s=S.songs[songId];if(!s)return "G";return (singer&&s.keys&&s.keys[singer])||s.key||"G"}
 /* tono con el que se canta en un servicio: manda el tono guardado de la persona, salvo un cambio "solo para este culto" */
 function svcKey(x){const saved=x.singer&&S.songs[x.songId]?.keys?.[x.singer];return (!x.custom&&saved)||x.key||S.songs[x.songId]?.key||"G"}
-function renderChart(body,st,targetKey){
-  const flats=FLAT_KEYS.has(targetKey);
+/* convierte lo que escribe la persona (G, Sol, sol#m7, Re/Fa#…) a cifrado americano */
+const LAT_IN={do:"C",re:"D",mi:"E",fa:"F",sol:"G",la:"A",si:"B"};
+function rootIn(r){if(!r)return null;const m=/^(do|re|mi|fa|sol|la|si|[a-g])([#b]?)$/i.exec(r);if(!m)return null;const n=m[1].length>1||/^(do|re|mi|fa|sol|la|si)$/i.test(m[1])?LAT_IN[m[1].toLowerCase()]:m[1].toUpperCase();return n?n+m[2]:null}
+function parseChordIn(txt){
+  const out=[];for(const part of txt.trim().split(/\s+/).filter(Boolean)){
+    const m=/^(do|re|mi|fa|sol|la|si|[a-g][#b]?)([#b]?)(.*?)(?:\/(do|re|mi|fa|sol|la|si|[a-g])([#b]?))?$/i.exec(part);
+    if(!m)return null;const r=rootIn(m[1]+m[2]);if(!r)return null;const b=m[4]?rootIn(m[4]+m[5]):null;
+    out.push(r+m[3]+(b?"/"+b:""))}
+  return out.length?out.join(" "):"";
+}
+/* lleva un acorde del tono que se ve al tono original de la canción */
+function unshiftChord(ch,st,origKey){const flats=FLAT_KEYS.has(origKey);return ch.split(" ").map(p=>{const m=/^([A-G][#b]?)([^/]*)(?:\/([A-G][#b]?))?$/.exec(p);if(!m)return p;return shiftNote(m[1],-st,flats)+m[2]+(m[3]?"/"+shiftNote(m[3],-st,flats):"")}).join(" ")}
+function chordAt(body,ci){let i=-1,r=null;(body||"").replace(/\[([^\]]+)\]/g,(m,c)=>{if(++i===ci)r=c;return m});return r}
+function diatonic(k){const p=keyParts(k);if(!p)return [];const fl=FLAT_KEYS.has(k);
+  const deg=p.minor?[[0,"m"],[3,""],[5,"m"],[7,"m"],[7,""],[8,""],[10,""]]:[[0,""],[2,"m"],[4,"m"],[5,""],[7,""],[9,"m"]];
+  return deg.map(([d,q])=>shiftNote(p.root,d,fl)+q)}
+function renderPop(){
+  const root=$("#pop-root"),P=S.pop;if(!P){root.innerHTML="";return}
+  const fl=FLAT_KEYS.has(P.target);const sug=[...new Set(diatonic(P.target).map(c=>fmtChord(c,0,fl)))];
+  root.innerHTML='<div class="chord-pop" role="dialog" aria-label="Cambiar acorde"><div class="wrap"><div class="meta">Cambiar acorde <strong>'+esc(P.val)+'</strong> · tono '+esc(showKey(P.target))+'</div>'+
+    '<input id="pop-in" value="'+esc(P.val)+'" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Acorde nuevo" placeholder="Ej.: G, Em7, D/F# o Sol">'+
+    '<div class="sugg">'+sug.map(c=>'<button data-act="popPick" data-v="'+esc(c)+'">'+esc(c)+'</button>').join("")+'</div>'+
+    '<div class="row"><button class="btn primary" data-act="popSave">Guardar</button><button class="btn" data-act="popCancel">Cancelar</button><button class="btn danger" data-act="popDel">Quitar acorde</button></div>'+
+    '<span class="hint">Escríbelo en el tono que estás viendo; se guarda bien aunque la canción esté transpuesta.</span></div></div>';
+  const i=$("#pop-in");i.focus();i.select();
+}
+function popSave(txt){
+  const P=S.pop;if(!P)return;const s=S.songs[P.id];if(!s){S.pop=null;renderPop();return}
+  const us=parseChordIn(txt);if(us===null){toast("No entiendo ese acorde. Ej.: G, Em7, D/F# o Sol");return}
+  if(chordAt(s.body,P.ci)!==P.orig){S.pop=null;renderPop();toast("La canción cambió; toca el acorde otra vez");return}
+  const body=setChordAt(s.body,P.ci,us?unshiftChord(us,P.st,s.key):"");S.pop=null;renderPop();
+  if(body===s.body)return;
+  S.db.collection("songs").doc(P.id).update({body,updatedAt:new Date().toISOString()}).then(()=>toast(us?"Acorde cambiado":"Acorde quitado")).catch(e=>toast(e&&e.code==="permission-denied"?"Tu cuenta no tiene permiso para editar":"No se pudo guardar"));
+}
+function setChordAt(body,ci,ch){let i=-1;return body.replace(/\[([^\]]+)\]/g,(m,c)=>++i===ci?(ch?"["+ch+"]":""):m)}
+function renderChart(body,st,targetKey,editable){
+  const flats=FLAT_KEYS.has(targetKey);let ci=-1;
   return (body||"").split("\n").map(raw=>{
     const line=raw.replace(/\s+$/,"");
     if(!line.trim())return '<div class="line blank"></div>';
@@ -250,7 +301,7 @@ function renderChart(body,st,targetKey){
     const segs=[];if(parts[0])segs.push({c:"",t:parts[0]});
     for(let i=1;i<parts.length;i+=2)segs.push({c:parts[i],t:parts[i+1]||""});
     const hasChord=segs.some(s=>s.c);
-    return '<div class="line'+(hasChord?"":" lyr-only")+'">'+segs.map(s=>'<span class="seg"><span class="ch">'+esc(s.c?fmtChord(s.c,st,flats):"")+'</span><span class="ly">'+esc(s.t||(s.c?" ":""))+'</span></span>').join("")+'</div>';
+    return '<div class="line'+(hasChord?"":" lyr-only")+'">'+segs.map(s=>'<span class="seg">'+(s.c&&editable?'<span class="ch edit" role="button" tabindex="0" data-act="chordEdit" data-ci="'+(++ci)+'">':(s.c&&++ci,'<span class="ch">'))+esc(s.c?fmtChord(s.c,st,flats):"")+'</span><span class="ly">'+esc(s.t||(s.c?" ":""))+'</span></span>').join("")+'</div>';
   }).join("");
 }
 
@@ -309,15 +360,28 @@ function viewServices(){
   if(past.length)h+='<details class="past"><summary>Servicios anteriores ('+past.length+')</summary><div class="list">'+past.map(svcCard).join("")+'</div></details>';
   return h;
 }
-function songRow(s){return '<button class="row-btn" data-act="openSong" data-id="'+s.id+'"><div class="grow"><div class="t">'+esc(s.title)+'</div><div class="s">'+esc(s.author||"Autor sin registrar")+(s.bpm?" · "+esc(s.bpm)+" BPM":"")+'</div></div><span class="key">'+esc(showKey(s.key))+'</span></button>'}
+/* tipo de canción: Alabanza (rápida) o Adoración (lenta) */
+const CATS=[["Alabanza","Alabanzas"],["Adoración","Adoraciones"]];
+const catTag=c=>c?'<span class="cat-tag" data-c="'+esc(c)+'">'+esc(c)+'</span>':'';
+function songOpts(sel){
+  const all=sorted(S.songs,(a,b)=>(a.title||"").localeCompare(b.title||"","es"));
+  const o=s=>'<option value="'+s.id+'"'+(s.id===sel?" selected":"")+'>'+esc(s.title)+'</option>';
+  const groups=[...CATS.map(([c,p])=>[p,all.filter(s=>s.cat===c)]),["Sin clasificar",all.filter(s=>!CATS.some(([c])=>c===s.cat))]].filter(g=>g[1].length);
+  return groups.length>1?groups.map(([l,ss])=>'<optgroup label="'+esc(l)+'">'+ss.map(o).join("")+'</optgroup>').join(""):all.map(o).join("");
+}
+function songRow(s){return '<button class="row-btn" data-act="openSong" data-id="'+s.id+'"><div class="grow"><div class="t">'+esc(s.title)+'</div><div class="s">'+catTag(s.cat)+esc(s.author||"Autor sin registrar")+(s.bpm?" · "+esc(s.bpm)+" BPM":"")+'</div></div><span class="key">'+esc(showKey(s.key))+'</span></button>'}
 function viewSongs(){
   const all=sorted(S.songs,(a,b)=>(a.title||"").localeCompare(b.title||"","es"));
   const q=S.q.trim().toLowerCase();
-  const list=q?all.filter(s=>(s.title+" "+(s.author||"")).toLowerCase().includes(q)):all;
+  const inCat=s=>!S.cat?true:S.cat==="none"?!CATS.some(([c])=>c===s.cat):s.cat===S.cat;
+  const list=all.filter(inCat).filter(s=>!q||(s.title+" "+(s.author||"")).toLowerCase().includes(q));
   let h='<input class="search" id="q" type="search" placeholder="Buscar por título o autor" value="'+esc(S.q)+'" aria-label="Buscar canción">';
   if(!all.length)return h+'<div class="empty"><strong>El cancionero está vacío</strong>Agrega una canción con su letra y acordes. Escribe los acordes entre corchetes, por ejemplo: [G]Te alabaré.</div>';
+  const none=all.filter(s=>!CATS.some(([c])=>c===s.cat)).length;
+  const f=(v,l,n)=>'<button class="filter" data-act="cat" data-v="'+v+'" aria-pressed="'+((S.cat||"")===v)+'">'+esc(l)+' <small>'+n+'</small></button>';
+  h+='<div class="filters" role="group" aria-label="Filtrar por tipo">'+f("","Todas",all.length)+CATS.map(([c,p])=>f(c,p,all.filter(s=>s.cat===c).length)).join("")+(none?f("none","Sin clasificar",none):"")+'</div>';
   h+='<p class="section-label">'+list.length+' canciones</p><div class="list">'+list.map(songRow).join("")+'</div>';
-  if(q&&!list.length)h+='<div class="empty">Ninguna canción coincide con “'+esc(S.q)+'”.</div>';
+  if(!list.length)h+='<div class="empty">'+(q?'Ninguna canción coincide con “'+esc(S.q)+'”.':'No hay canciones en este grupo.')+'</div>';
   return h;
 }
 function viewMembers(){
@@ -367,12 +431,15 @@ function sheetSong(sh){
   const target=sh.key||s.key;const st=diff(s.key,target);
   const rel=((st+6)%12)-6;
   let b='<div><div class="meta">'+esc(s.author||"Autor sin registrar")+(s.bpm?" · "+esc(s.bpm)+" BPM":"")+' · Tono original <span class="key">'+esc(showKey(s.key))+'</span></div></div>';
+  if(S.canWrite)b+='<div class="cat-set"><span class="meta">Tipo:</span>'+CATS.map(([c])=>'<button class="filter" data-act="setCat" data-v="'+esc(c)+'" aria-pressed="'+(s.cat===c)+'">'+esc(c)+'</button>').join("")+'</div>';
+  else if(s.cat)b+='<div>'+catTag(s.cat)+'</div>';
   if(sh.singer)b+='<div class="meta">Canta <strong>'+esc(mName(sh.singer))+'</strong>'+(s.keys&&s.keys[sh.singer]===target?' · en su tono':'')+'</div>';
   const pk=Object.entries(s.keys||{}).filter(([id,k])=>k).sort((a,b)=>mName(a[0]).localeCompare(mName(b[0]),"es"));
   if(pk.length)b+='<div class="keys-list"><span class="meta">Tonos:</span>'+pk.map(([id,k])=>'<button data-act="trTo" data-v="'+esc(k)+'" aria-pressed="'+(k===target)+'">'+esc(mName(id))+' <span class="key">'+esc(showKey(k))+'</span></button>').join("")+'</div>';
   b+='<div class="tools"><div class="transpose" aria-label="Transponer"><button class="mini" data-act="tr" data-v="-1" aria-label="Bajar medio tono">−</button><span class="now">'+esc(showKey(target))+(rel?' <small>('+(rel>0?"+":"")+rel+')</small>':"")+'</span><button class="mini" data-act="tr" data-v="1" aria-label="Subir medio tono">+</button>'+(st?'<button class="mini" data-act="tr" data-v="0">Original</button>':"")+'</div>'+
     '<div class="transpose"><button class="mini" data-act="fs" data-v="-1" aria-label="Letra más pequeña">A−</button><button class="mini" data-act="fs" data-v="1" aria-label="Letra más grande">A+</button></div></div>';
-  b+='<div class="chart" style="--fs:'+(sh.fs||16)+'px">'+(s.body?renderChart(s.body,st,target):'<span class="meta">Esta canción aún no tiene letra ni acordes.</span>')+'</div>';
+  if(S.canWrite&&s.body)b+='<span class="hint">Toca un acorde para cambiarlo.</span>';
+  b+='<div class="chart" style="--fs:'+(sh.fs||16)+'px">'+(s.body?renderChart(s.body,st,target,S.canWrite):'<span class="meta">Esta canción aún no tiene letra ni acordes.</span>')+'</div>';
   return [s.title,right,b];
 }
 function memberOpts(sel,filter,date){
@@ -407,7 +474,7 @@ function sheetServiceEdit(sh){
       const saved=x.singer&&S.songs[x.songId]?.keys?.[x.singer];
       const nm=x.singer?mName(x.singer):"",orig=S.songs[x.songId]?.key;
       const hint=!x.singer?'':saved===x.key?'Es el tono guardado de '+nm+'.':x.remember!==false&&(saved||x.key!==orig)?'Al guardar, '+showKey(x.key)+' quedará como el tono de '+nm+'.':saved?'Su tono guardado es '+showKey(saved)+'; este cambio es solo para este culto.':x.key!==orig?'Solo para este culto; no se guardará como tono de '+nm+'.':'Sin tono guardado para '+nm+'; se usa el original.';
-      return '<div class="song-item"><div class="inline"><select data-song-id="'+i+'" aria-label="Canción">'+songs.map(s=>'<option value="'+s.id+'"'+(s.id===x.songId?" selected":"")+'>'+esc(s.title)+'</option>').join("")+'</select><button class="mini" data-act="songUp" data-i="'+i+'" aria-label="Subir">↑</button><button class="mini" data-act="songDel" data-i="'+i+'" aria-label="Quitar">✕</button></div>'+
+      return '<div class="song-item"><div class="inline"><select data-song-id="'+i+'" aria-label="Canción">'+songOpts(x.songId)+'</select><button class="mini" data-act="songUp" data-i="'+i+'" aria-label="Subir">↑</button><button class="mini" data-act="songDel" data-i="'+i+'" aria-label="Quitar">✕</button></div>'+
       '<div class="inline"><select data-song-singer="'+i+'" aria-label="Quién la canta">'+singerOpts(x.singer,d)+'</select><select class="k" data-song-key="'+i+'" aria-label="Tono">'+keyOpts(x.key)+'</select></div>'+
       (x.singer?'<label class="remember"><input type="checkbox" data-song-remember="'+i+'"'+(x.remember!==false?" checked":"")+'>Recordar este tono para '+esc(mName(x.singer))+'</label><span class="hint">'+esc(hint)+'</span>':'')+'</div>'}).join("")+
     (songs.length?'<button class="add" data-act="songAdd">+ Agregar canción</button>':'<span class="hint">Agrega canciones al Cancionero para elegirlas aquí.</span>')+'</div>';
@@ -419,6 +486,7 @@ function sheetSongEdit(sh){
   const d=sh.draft;
   let b='<div class="field"><label for="f-title">Título</label><input id="f-title" data-f="title" value="'+esc(d.title)+'"></div>';
   b+='<div class="field"><label for="f-author">Autor o intérprete</label><input id="f-author" data-f="author" value="'+esc(d.author)+'"></div>';
+  b+='<div class="field"><span class="lbl">Tipo</span><div class="toggle-chips">'+[...CATS.map(([c])=>[c,c]),["","Sin clasificar"]].map(([v,l])=>'<label><input type="radio" name="f-cat" data-f="cat" value="'+esc(v)+'"'+((d.cat||"")===v?" checked":"")+'>'+esc(l)+'</label>').join("")+'</div></div>';
   b+='<div class="two"><div class="field"><label for="f-key">Tono original</label><select id="f-key" data-f="key">'+keyOpts(d.key)+'</select></div><div class="field"><label for="f-bpm">Tempo (BPM)</label><input id="f-bpm" type="number" inputmode="numeric" min="30" max="240" data-f="bpm" value="'+esc(d.bpm)+'"></div></div>';
   const mem=sorted(S.members,(a,b)=>(a.name||"").localeCompare(b.name||"","es"));
   b+='<div class="field"><span class="lbl">Tono de cada persona</span>'+d.keys.map((x,i)=>'<div class="inline"><select data-sk-member="'+i+'" aria-label="Persona"><option value="">Elige persona</option>'+mem.map(m=>'<option value="'+m.id+'"'+(m.id===x.memberId?" selected":"")+'>'+esc(m.name)+'</option>').join("")+'</select><select class="k" data-sk-key="'+i+'" aria-label="Tono">'+keyOpts(x.key)+'</select><button class="mini" data-act="skDel" data-i="'+i+'" aria-label="Quitar">✕</button></div>').join("")+
@@ -445,7 +513,7 @@ function actionsHtml(sh,save,del){
 /* ---------- actions ---------- */
 let kseq=0;
 function push(sh){sh.k=++kseq;S.stack.push(sh);renderSheet()}
-function pop(){S.stack.pop();render()}
+function pop(){S.stack.pop();if(S.pop){S.pop=null;renderPop()}render()}
 const newId=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6);
 async function write(fn,okMsg,popCount){
   const sh=top();sh.busy=true;renderSheet();
@@ -456,12 +524,21 @@ async function write(fn,okMsg,popCount){
 }
 const clean=o=>JSON.parse(JSON.stringify(o));
 const A={
+  cat(el){S.cat=el.dataset.v;try{localStorage.setItem("alab-cat",S.cat)}catch(e){}render()},
+  setCat(el){const sh=top(),s=S.songs[sh.id];if(!s)return;const v=s.cat===el.dataset.v?"":el.dataset.v;
+    S.db.collection("songs").doc(sh.id).update({cat:v}).then(()=>toast(v?"Marcada como "+v:"Tipo quitado")).catch(e=>toast(e&&e.code==="permission-denied"?"Tu cuenta no tiene permiso para editar":"No se pudo guardar"))},
+  chordEdit(el){const sh=top(),s=S.songs[sh.id];if(!s)return;const ci=+el.dataset.ci;const orig=chordAt(s.body,ci);if(orig==null)return;
+    const target=sh.key||s.key,st=diff(s.key,target);S.pop={id:sh.id,ci,orig,st,target,val:fmtChord(orig,st,FLAT_KEYS.has(target))};renderPop()},
+  popPick(el){const i=$("#pop-in");if(i){i.value=el.dataset.v;i.focus()}},
+  popCancel(){S.pop=null;renderPop()},
+  popDel(){popSave("")},
+  popSave(){popSave($("#pop-in")?.value??"")},
   tab(el){S.tab=el.dataset.v;try{localStorage.setItem("alab-tab",S.tab)}catch(e){}render._top=true;render();window.scrollTo(0,0)},
   notation(el){S.notation=el.dataset.v;try{localStorage.setItem("alab-notation",S.notation)}catch(e){}render()},
   back(){pop()},
   fab(){
     if(S.tab==="services")push({type:"serviceEdit",id:null,draft:{date:todayStr(),time:"09:00",type:"Culto dominical",leader:"",singers:[],musicians:[{role:"Piano",memberId:""},{role:"Batería",memberId:""},{role:"Audiovisuales",memberId:""}],songs:[],notes:""}});
-    else if(S.tab==="songs")push({type:"songEdit",id:null,draft:{title:"",author:"",key:"G",bpm:"",body:"",keys:[]}});
+    else if(S.tab==="songs")push({type:"songEdit",id:null,draft:{title:"",author:"",cat:S.cat&&S.cat!=="none"?S.cat:"",key:"G",bpm:"",body:"",keys:[]}});
     else push({type:"memberEdit",id:null,draft:{name:"",roles:[],note:"",unavailable:[]}});
   },
   openService(el){push({type:"service",id:el.dataset.id})},
@@ -469,7 +546,7 @@ const A={
   editService(el){const s=S.services[el.dataset.id];const d=clean({date:s.date||"",time:s.time||"",type:s.type||"",leader:s.leader||"",singers:s.singers||[],musicians:s.musicians||[],songs:s.songs||[],notes:s.notes||""});
     d.songs.forEach(x=>{if(x.singer===undefined)x.singer=d.leader||"";x.key=svcKey(x);x.remember=!x.custom;delete x.custom});
     push({type:"serviceEdit",id:el.dataset.id,draft:d})},
-  editSong(el){const s=S.songs[el.dataset.id];push({type:"songEdit",id:el.dataset.id,draft:clean({title:s.title||"",author:s.author||"",key:s.key||"G",bpm:s.bpm||"",body:s.body||"",keys:Object.entries(s.keys||{}).map(([memberId,key])=>({memberId,key}))})})},
+  editSong(el){const s=S.songs[el.dataset.id];push({type:"songEdit",id:el.dataset.id,draft:clean({title:s.title||"",author:s.author||"",cat:s.cat||"",key:s.key||"G",bpm:s.bpm||"",body:s.body||"",keys:Object.entries(s.keys||{}).map(([memberId,key])=>({memberId,key}))})})},
   trTo(el){const sh=top();sh.key=el.dataset.v;renderSheet()},
   skAdd(){top().draft.keys.push({memberId:"",key:top().draft.key||"G"});renderSheet()},
   skDel(el){top().draft.keys.splice(+el.dataset.i,1);renderSheet()},
@@ -526,7 +603,10 @@ document.addEventListener("change",e=>{
   else if(t.dataset.skKey!==undefined){d.keys[+t.dataset.skKey].key=t.value}
   else if(t.dataset.f){d[t.dataset.f]=t.value;if((t.dataset.f==="date"||t.dataset.f==="leader")&&sh.type==="serviceEdit")renderSheet()}
 });
-document.addEventListener("keydown",e=>{if(e.key==="Escape"&&S.stack.length)pop()});
+document.addEventListener("keydown",e=>{
+  if(S.pop){if(e.key==="Escape"){S.pop=null;renderPop();e.preventDefault()}else if(e.key==="Enter"&&e.target.id==="pop-in"){e.preventDefault();popSave(e.target.value)}return}
+  if((e.key==="Enter"||e.key===" ")&&e.target.dataset&&e.target.dataset.act==="chordEdit"){e.preventDefault();A.chordEdit(e.target);return}
+  if(e.key==="Escape"&&S.stack.length)pop()});
 
 /* ---------- data ---------- */
 render();
