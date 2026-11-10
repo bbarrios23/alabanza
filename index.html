@@ -143,6 +143,27 @@ ol.reper .grow{flex:1;min-width:0;font-weight:600}
 .chord-pop .sugg{display:flex;flex-wrap:wrap;gap:6px}
 .chord-pop .sugg button{font-family:var(--f-mono);font-weight:700;color:var(--chord);background:var(--accent-soft);border:0;border-radius:8px;padding:6px 10px}
 .chord-pop .row{display:flex;gap:8px;flex-wrap:wrap}
+.plan-month{display:flex;align-items:center;gap:10px}
+.plan-month input{padding:9px 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+.plan-block{display:flex;flex-direction:column;gap:10px;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px}
+.plan-block h3{margin:0;font-family:var(--f-display);font-weight:400;font-size:1.15rem}
+.plan-block .hint{margin:0}
+.plan-person{display:flex;flex-direction:column;gap:8px;border:1px solid var(--line);border-radius:12px;padding:10px;background:var(--bg)}
+.plan-person.out{opacity:.7}
+.pp-head{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.pp-row{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.pp-row .filter{padding:4px 10px;font-size:.8rem}
+.day{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:4px 8px;font-size:.8rem}
+.day.off{background:var(--danger);border-color:var(--danger);color:#fff;text-decoration:line-through}
+.linkish{background:none;border:0;color:var(--accent);font-size:.8rem;text-decoration:underline;padding:4px}
+.pp-note{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--surface);font-size:.88rem}
+label.num{display:inline-flex;align-items:center;gap:6px;font-size:.85rem}
+label.num input{width:58px;padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:var(--surface)}
+.prop{border:1px solid var(--line);border-radius:12px;padding:10px;display:flex;flex-direction:column;gap:6px;background:var(--bg)}
+.prop.warn{border-color:var(--danger)}
+.prop-row{display:grid;grid-template-columns:110px 1fr;gap:8px;align-items:center;font-size:.88rem}
+.prop-row select{width:100%;min-width:0;padding:7px 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface)}
+.prop-sum{display:flex;flex-direction:column;gap:4px;font-size:.86rem}
 .mini{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:8px 10px;line-height:1;min-width:36px}
 .add{align-self:flex-start;background:none;border:1px dashed var(--accent);color:var(--accent);border-radius:10px;padding:8px 14px;font-weight:600}
 .actions{display:flex;gap:10px;flex-wrap:wrap;justify-content:space-between}
@@ -184,6 +205,7 @@ ol.reper .grow{flex:1;min-width:0;font-weight:600}
     <button role="tab" data-act="tab" data-v="services" id="tab-services">Servicios</button>
     <button role="tab" data-act="tab" data-v="songs" id="tab-songs">Cancionero</button>
     <button role="tab" data-act="tab" data-v="members" id="tab-members">Equipo</button>
+    <button role="tab" data-act="tab" data-v="plan" id="tab-plan" hidden>Planificar</button>
   </nav>
 </div></header>
 <main><div class="wrap" id="main"></div></main>
@@ -227,7 +249,8 @@ const MONTHS_L=["enero","febrero","marzo","abril","mayo","junio","julio","agosto
 const WD=["dom","lun","mar","mié","jue","vie","sáb"];
 const WD_L=["Domingo","Lunes","Martes","Miércoles","Jueves","Viernes","Sábado"];
 
-const S={tab:"services",songs:{},members:{},services:{},db:null,user:null,canWrite:false,status:"loading",notation:"us",stack:[],q:"",cat:"",pop:null,status:"loading"};
+const S={tab:"services",songs:{},members:{},services:{},db:null,user:null,canWrite:false,status:"loading",notation:"us",stack:[],q:"",cat:"",pop:null,status:"loading",
+  plan:{ym:(()=>{const d=new Date();d.setDate(1);d.setMonth(d.getMonth()+1);return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")})(),voices:{Viernes:3,Madrugada:1,Dominical:3},overwrite:false,prop:null}};
 try{const n=localStorage.getItem("alab-notation");if(n==="la"||n==="us")S.notation=n;const t=localStorage.getItem("alab-tab");if(t)S.tab=t;const c=localStorage.getItem("alab-cat");if(c)S.cat=c}catch(e){}
 
 const $=s=>document.querySelector(s);
@@ -321,16 +344,18 @@ function top(){return S.stack[S.stack.length-1]}
 
 /* ---------- main views ---------- */
 function render(skipSheet){
-  for(const t of ["services","songs","members"]){$("#tab-"+t).setAttribute("aria-selected",S.tab===t)}
+  $("#tab-plan").hidden=!S.canWrite;
+  const tab=S.tab==="plan"&&!S.canWrite?"services":S.tab;
+  for(const t of ["services","songs","members","plan"]){$("#tab-"+t).setAttribute("aria-selected",tab===t)}
   $("#nt-us").setAttribute("aria-pressed",S.notation==="us");$("#nt-la").setAttribute("aria-pressed",S.notation==="la");
-  const fab=$("#fab");fab.hidden=!S.canWrite;fab.textContent=S.tab==="services"?"+ Servicio":S.tab==="songs"?"+ Canción":"+ Persona";
+  const fab=$("#fab");fab.hidden=!S.canWrite||tab==="plan";fab.textContent=S.tab==="services"?"+ Servicio":S.tab==="songs"?"+ Canción":"+ Persona";
   let h="";
   if(S.status==="config")h+='<div class="notice">Falta configurar Firebase. Pega los datos de tu proyecto en la sección CONFIGURACIÓN del archivo index.html.</div>';
   else if(S.status==="slow")h+='<div class="notice">Los datos están tardando en cargar. Revisa tu conexión; la página se actualizará sola.</div>';
   else if(S.status==="error")h+='<div class="notice">No se pudieron cargar los datos. Revisa que las reglas de Firestore estén publicadas.</div>';
   if(S.canWrite&&S.status==="ready"&&!Object.keys(S.services).length&&!Object.keys(S.members).length&&!Object.keys(S.songs).length)
     h+='<div class="notice">La base de datos está vacía. <button class="btn primary" style="margin-top:8px;display:block" data-act="seed">Cargar equipo y cronograma de noviembre</button></div>';
-  if(S.tab==="services")h+=viewServices();else if(S.tab==="songs")h+=viewSongs();else h+=viewMembers();
+  if(tab==="services")h+=viewServices();else if(tab==="songs")h+=viewSongs();else if(tab==="plan")h+=viewPlan();else h+=viewMembers();
   const y=window.scrollY,pastOpen=!!$("#main details.past")?.open;
   $("#main").innerHTML=h;
   if(pastOpen){const p=$("#main details.past");if(p)p.open=true}
@@ -392,6 +417,94 @@ function viewMembers(){
   h+=all.map(m=>'<button class="row-btn" data-act="editMember" data-id="'+m.id+'"><div class="grow"><div class="t">'+esc(m.name)+'</div><div class="s">'+esc((m.roles||[]).join(", ")||"Sin rol asignado")+(m.note?" · "+esc(m.note):"")+'</div>'+((m.unavailable||[]).filter(x=>x>=todayStr()).length?'<div class="s">No disponible: '+esc((m.unavailable||[]).filter(x=>x>=todayStr()).sort().map(shortDate).join(", "))+'</div>':'')+'</div></button>').join("");
   return h+'</div>';
 }
+
+/* ---------- planificar mes ---------- */
+const PLAN=[
+  {short:"Viernes",type:"Culto de viernes",dow:5,time:"19:00",slots:["Piano","Batería","Audiovisuales"]},
+  {short:"Madrugada",type:"Culto de madrugada",dow:0,time:"05:00",slots:["Piano"]},
+  {short:"Dominical",type:"Culto dominical",dow:0,time:"10:00",slots:["Piano","Batería","Audiovisuales"]}];
+const PLAN_SHORTS=PLAN.map(p=>p.short);
+const isVoice=m=>(m.roles||[]).some(r=>r==="Voz"||r==="Coros");
+const mMonth=(m,ym)=>(m.months&&m.months[ym])||{};
+const mTypes=(m,ym)=>mMonth(m,ym).types||m.types||PLAN_SHORTS;
+const mOut=(m,ym)=>!!mMonth(m,ym).out;
+const ymLabel=ym=>{const [y,mo]=ym.split("-");return MONTHS_L[+mo-1]+" "+y};
+function planDates(ym){
+  const [y,mo]=ym.split("-").map(Number);const out=[];if(!y||!mo)return out;
+  for(let d=new Date(y,mo-1,1);d.getMonth()===mo-1;d.setDate(d.getDate()+1)){
+    const ds=y+"-"+String(mo).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+    for(const p of PLAN)if(d.getDay()===p.dow)out.push({...p,date:ds,id:ds+"-"+p.time.replace(":","")});
+  }
+  return out.sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time));
+}
+function planPeople(){return sorted(S.members,(a,b)=>(a.name||"").localeCompare(b.name||"","es")).filter(m=>isVoice(m)||(m.roles||[]).some(r=>PLAN.some(p=>p.slots.includes(r))))}
+function viewPlan(){
+  const P=S.plan,ym=P.ym,dates=planDates(ym),days=[...new Set(dates.map(d=>d.date))];
+  let h='<p class="section-label">Planificar mes</p><div class="plan-month"><label for="plan-ym" class="meta">Mes</label><input type="month" id="plan-ym" data-plan="ym" value="'+esc(ym)+'"></div>';
+  h+='<div class="plan-block"><h3>1. Novedades de '+esc(ymLabel(ym))+'</h3><p class="hint">Marca en qué cultos sirve cada persona este mes, los días que no puede y cualquier nota. Se guarda al tocar.</p><div class="list">';
+  for(const m of planPeople()){
+    const mm=mMonth(m,ym),out=!!mm.out,types=mTypes(m,ym);
+    h+='<div class="plan-person'+(out?' out':'')+'"><div class="pp-head"><div><strong>'+esc(m.name)+'</strong> <span class="meta">'+esc((m.roles||[]).join(", "))+'</span></div><button class="filter" data-act="planOut" data-id="'+m.id+'" aria-pressed="'+out+'">'+(out?'No sirve este mes':'¿No sirve este mes?')+'</button></div>';
+    if(!out){
+      h+='<div class="pp-row"><span class="meta">Cultos:</span>'+PLAN_SHORTS.map(t=>'<button class="filter" data-act="planType" data-id="'+m.id+'" data-v="'+t+'" aria-pressed="'+types.includes(t)+'">'+t+'</button>').join("")+(mm.types?'<button class="linkish" data-act="planTypeReset" data-id="'+m.id+'">Usar los de siempre</button>':'')+'</div>';
+      h+='<div class="pp-row"><span class="meta">No puede:</span>'+days.map(d=>'<button class="day'+(isOff(m.id,d)?' off':'')+'" data-act="planOff" data-id="'+m.id+'" data-v="'+d+'" aria-pressed="'+isOff(m.id,d)+'">'+esc(shortDate(d).replace(/ \S+$/,""))+'</button>').join("")+'</div>';
+    }
+    h+='<input class="pp-note" data-plan-note="'+m.id+'" placeholder="Nota del mes (opcional)" value="'+esc(mm.note||"")+'"></div>';
+  }
+  h+='</div></div>';
+  const existing=dates.filter(d=>S.services[d.id]);
+  h+='<div class="plan-block"><h3>2. Generar cronograma</h3><p class="hint">Reparte por turnos (round robin): primero a quien menos veces ha servido en el mes y, si empatan, a quien hace más tiempo que no sirve. Para las voces cuenta también lo que ya toca. Respeta las novedades de arriba y evita que alguien sirva dos veces el mismo día cuando hay otra opción.</p>';
+  h+='<div class="pp-row"><span class="meta">Voces por culto:</span>'+PLAN.map(p=>'<label class="num">'+p.short+' <input type="number" min="0" max="8" data-plan-voices="'+p.short+'" value="'+(P.voices[p.short]??1)+'"></label>').join("")+'</div>';
+  h+='<p class="meta">'+dates.length+' cultos en '+esc(ymLabel(ym))+(existing.length?' · '+existing.length+' ya están en la agenda':'')+'</p>';
+  if(existing.length)h+='<label class="remember"><input type="checkbox" data-plan="overwrite"'+(P.overwrite?" checked":"")+'> Reemplazar también los '+existing.length+' que ya existen (se conservan sus canciones, notas y quién dirige)</label>';
+  h+='<button class="btn primary" data-act="planGen">'+(P.prop&&P.prop.ym===ym?'Volver a generar':'Generar propuesta')+'</button></div>';
+  if(P.prop&&P.prop.ym===ym)h+=viewProposal(P.prop);
+  return h;
+}
+function viewProposal(pr){
+  let h='<div class="plan-block"><h3>3. Propuesta para '+esc(ymLabel(pr.ym))+'</h3><p class="hint">Revisa y cambia lo que quieras antes de guardar. Nada se guarda hasta que toques "Guardar en la agenda".</p>';
+  if(pr.skipped.length)h+='<p class="meta">No se tocan '+pr.skipped.length+' cultos que ya estaban en la agenda.</p>';
+  pr.items.forEach((it,i)=>{
+    const empty=it.musicians.some(m=>!m.memberId)||it.singers.some(x=>!x);
+    h+='<div class="prop'+(empty?' warn':'')+'"><div class="prop-head"><strong>'+esc(shortDate(it.date))+'</strong> · '+esc(it.short)+' '+esc(fmtTime(it.time))+(it.existed?' <span class="cat-tag">reemplaza</span>':'')+'</div>';
+    h+=it.musicians.map((m,j)=>'<div class="prop-row"><span>'+esc(m.role)+'</span><select data-prop-mus="'+i+','+j+'">'+memberOpts(m.memberId,m.role,it.date)+'</select></div>').join("");
+    h+=it.singers.map((x,j)=>'<div class="prop-row"><span>'+(j?'':'Voces')+'</span><select data-prop-sing="'+i+','+j+'">'+memberOpts(x,"Voz",it.date)+'</select></div>').join("");
+    h+='</div>';
+  });
+  const cnt={};pr.items.forEach(it=>{it.musicians.forEach(m=>{if(m.memberId)(cnt[m.role]=cnt[m.role]||{})[m.memberId]=(cnt[m.role][m.memberId]||0)+1});it.singers.forEach(x=>{if(x)(cnt.Voces=cnt.Voces||{})[x]=(cnt.Voces[x]||0)+1})});
+  h+='<div class="prop-sum"><strong>Reparto del mes</strong>'+Object.entries(cnt).map(([r,o])=>'<div><span class="meta">'+esc(r)+':</span> '+Object.entries(o).sort((a,b)=>b[1]-a[1]||mName(a[0]).localeCompare(mName(b[0]),"es")).map(([id,n])=>esc(mName(id))+' '+n).join(" · ")+'</div>').join("")+'</div>';
+  h+='<div class="actions"><button class="btn primary" data-act="planSave"'+(pr.busy?' disabled':'')+'>'+(pr.busy?'Guardando…':'Guardar en la agenda ('+pr.items.length+')')+'</button><button class="btn ghost" data-act="planDiscard">Descartar</button></div></div>';
+  return h;
+}
+function planGenerate(){
+  const P=S.plan,ym=P.ym,dates=planDates(ym),people=planPeople();
+  const all=Object.entries(S.services).map(([id,v])=>({id,...v}));
+  const replace=new Set(P.overwrite?dates.filter(d=>S.services[d.id]).map(d=>d.id):[]);
+  const cnt={},last={},day={},tot={};
+  const note=(id,role,date,inMonth)=>{if(!id)return;const k=role+"|"+id;if(inMonth){cnt[k]=(cnt[k]||0)+1;tot[id]=(tot[id]||0)+1}if(!last[k]||last[k]<date)last[k]=date;(day[date]=day[date]||new Set()).add(id)};
+  const noteSvc=(s,inMonth)=>{(s.musicians||[]).forEach(m=>note(m.memberId,m.role,s.date,inMonth));(s.singers||[]).forEach(x=>note(x,"Voz",s.date,inMonth))};
+  for(const s of all){if(!s.date||replace.has(s.id))continue;if(s.date<ym+"-01")noteSvc(s,false);else if(s.date.startsWith(ym))noteSvc(s,true)}
+  const items=[],skipped=[];
+  for(const d of dates){
+    if(S.services[d.id]&&!replace.has(d.id)){skipped.push(d.id);continue}
+    const used=new Set();
+    const pick=(role)=>{
+      const voice=role==="Voz";
+      const c=people.filter(m=>(voice?isVoice(m):(m.roles||[]).includes(role))&&!mOut(m,ym)&&mTypes(m,ym).includes(d.short)&&!isOff(m.id,d.date)&&!used.has(m.id));
+      const k=m=>role+"|"+m.id,same=m=>day[d.date]&&day[d.date].has(m.id)?1:0;
+      /* para voces cuenta todo lo que ya sirve en el mes (así quien toca no canta de más) */
+      const n=m=>voice?(tot[m.id]||0):(cnt[k(m)]||0);
+      c.sort((a,b)=>same(a)-same(b)||n(a)-n(b)||(last[k(a)]||"").localeCompare(last[k(b)]||"")||(a.name||"").localeCompare(b.name||"","es"));
+      const m=c[0];if(!m)return "";used.add(m.id);note(m.id,role,d.date,true);return m.id;
+    };
+    const musicians=d.slots.map(role=>({role,memberId:pick(role)}));
+    const singers=Array.from({length:Math.max(0,+P.voices[d.short]||0)},()=>pick("Voz"));
+    items.push({id:d.id,date:d.date,time:d.time,type:d.type,short:d.short,musicians,singers,existed:!!S.services[d.id]});
+  }
+  P.prop={ym,items,skipped};
+}
+function memberUpd(id,fields,msg){S.db.collection("members").doc(id).update(...fields).then(()=>msg&&toast(msg)).catch(e=>toast(e&&e.code==="permission-denied"?"Tu cuenta no tiene permiso para editar":"No se pudo guardar"))}
+const FP=(...p)=>new firebase.firestore.FieldPath(...p);
 
 /* ---------- sheets ---------- */
 function renderSheet(){
@@ -498,6 +611,7 @@ function sheetSongEdit(sh){
 function sheetMemberEdit(sh){
   const d=sh.draft;
   let b='<div class="field"><label for="f-name">Nombre</label><input id="f-name" data-f="name" value="'+esc(d.name)+'"></div>';
+  b+='<div class="field"><span class="lbl">Cultos en los que sirve normalmente</span><div class="toggle-chips">'+PLAN_SHORTS.map(t=>'<label><input type="checkbox" data-mtype="'+t+'"'+(d.types.includes(t)?" checked":"")+'>'+t+'</label>').join("")+'</div><span class="hint">Lo usa Planificar para repartir los turnos. Cada mes se puede cambiar en Planificar.</span></div>';
   b+='<div class="field"><span class="lbl">Qué hace en el ministerio</span><div class="toggle-chips">'+ALL_ROLES.map(r=>'<label><input type="checkbox" data-role="'+esc(r)+'"'+(d.roles.includes(r)?" checked":"")+'>'+esc(r)+'</label>').join("")+'</div></div>';
   b+='<div class="field"><span class="lbl">Fechas en que no puede servir</span>'+(d.unavailable.length?'<div class="chips">'+[...d.unavailable].sort().map(x=>'<span class="chip">'+esc(shortDate(x))+(S.canWrite?' <button class="x" data-act="offDel" data-v="'+x+'" aria-label="Quitar fecha">✕</button>':'')+'</span>').join("")+'</div>':'<span class="hint">Disponible todas las fechas.</span>')+
     (S.canWrite?'<div class="inline"><input id="f-off" type="date" aria-label="Fecha no disponible" style="flex:1;min-width:0;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface)"><button class="add" data-act="offAdd">+ Agregar fecha</button></div>':'')+'</div>';
@@ -524,6 +638,20 @@ async function write(fn,okMsg,popCount){
 }
 const clean=o=>JSON.parse(JSON.stringify(o));
 const A={
+  planOut(el){const m=S.members[el.dataset.id],ym=S.plan.ym;memberUpd(el.dataset.id,[FP("months",ym,"out"),!mOut(m,ym)])},
+  planType(el){const m=S.members[el.dataset.id],ym=S.plan.ym,v=el.dataset.v,cur=mTypes(m,ym);
+    const nx=PLAN_SHORTS.filter(t=>t===v?!cur.includes(t):cur.includes(t));memberUpd(el.dataset.id,[FP("months",ym,"types"),nx])},
+  planTypeReset(el){memberUpd(el.dataset.id,[FP("months",S.plan.ym,"types"),firebase.firestore.FieldValue.delete()])},
+  planOff(el){const id=el.dataset.id,d=el.dataset.v,F=firebase.firestore.FieldValue;memberUpd(id,["unavailable",isOff(id,d)?F.arrayRemove(d):F.arrayUnion(d)])},
+  planGen(){planGenerate();render();const p=$(".plan-block:last-of-type");if(p)p.scrollIntoView({behavior:"smooth",block:"start"})},
+  planDiscard(){S.plan.prop=null;render()},
+  async planSave(){const pr=S.plan.prop;if(!pr||pr.busy)return;pr.busy=true;render();
+    try{const b=S.db.batch(),now=new Date().toISOString();
+      for(const it of pr.items){const ex=S.services[it.id]||{};const p=PLAN.find(x=>x.short===it.short);
+        b.set(S.db.collection("services").doc(it.id),clean({date:it.date,time:it.time,type:ex.type||it.type,leader:ex.leader||"",singers:it.singers.filter(Boolean),
+          musicians:[...it.musicians,...(ex.musicians||[]).filter(m=>m.role&&!p.slots.includes(m.role))],songs:ex.songs||[],notes:ex.notes||"",updatedAt:now}))}
+      await b.commit();toast("Se guardaron "+pr.items.length+" cultos en la agenda");S.plan.prop=null;S.tab="services";render._top=true;render()}
+    catch(e){pr.busy=false;render();toast(e&&e.code==="permission-denied"?"Tu cuenta no tiene permiso para editar":"No se pudo guardar")}},
   cat(el){S.cat=el.dataset.v;try{localStorage.setItem("alab-cat",S.cat)}catch(e){}render()},
   setCat(el){const sh=top(),s=S.songs[sh.id];if(!s)return;const v=s.cat===el.dataset.v?"":el.dataset.v;
     S.db.collection("songs").doc(sh.id).update({cat:v}).then(()=>toast(v?"Marcada como "+v:"Tipo quitado")).catch(e=>toast(e&&e.code==="permission-denied"?"Tu cuenta no tiene permiso para editar":"No se pudo guardar"))},
@@ -539,7 +667,7 @@ const A={
   fab(){
     if(S.tab==="services")push({type:"serviceEdit",id:null,draft:{date:todayStr(),time:"09:00",type:"Culto dominical",leader:"",singers:[],musicians:[{role:"Piano",memberId:""},{role:"Batería",memberId:""},{role:"Audiovisuales",memberId:""}],songs:[],notes:""}});
     else if(S.tab==="songs")push({type:"songEdit",id:null,draft:{title:"",author:"",cat:S.cat&&S.cat!=="none"?S.cat:"",key:"G",bpm:"",body:"",keys:[]}});
-    else push({type:"memberEdit",id:null,draft:{name:"",roles:[],note:"",unavailable:[]}});
+    else push({type:"memberEdit",id:null,draft:{name:"",roles:[],note:"",unavailable:[],types:[...PLAN_SHORTS]}});
   },
   openService(el){push({type:"service",id:el.dataset.id})},
   openSong(el){push({type:"song",id:el.dataset.id,key:el.dataset.key||S.songs[el.dataset.id]?.key,singer:el.dataset.singer||"",fs:16})},
@@ -550,7 +678,7 @@ const A={
   trTo(el){const sh=top();sh.key=el.dataset.v;renderSheet()},
   skAdd(){top().draft.keys.push({memberId:"",key:top().draft.key||"G"});renderSheet()},
   skDel(el){top().draft.keys.splice(+el.dataset.i,1);renderSheet()},
-  editMember(el){const m=S.members[el.dataset.id];push({type:"memberEdit",id:el.dataset.id,draft:clean({name:m.name||"",roles:m.roles||[],note:m.note||"",unavailable:m.unavailable||[]})})},
+  editMember(el){const m=S.members[el.dataset.id];push({type:"memberEdit",id:el.dataset.id,draft:clean({name:m.name||"",roles:m.roles||[],note:m.note||"",unavailable:m.unavailable||[],types:m.types||[...PLAN_SHORTS]})})},
   tr(el){const sh=top(),s=S.songs[sh.id];const v=+el.dataset.v;sh.key=v===0?s.key:shiftKey(sh.key||s.key,v);renderSheet()},
   fs(el){const sh=top();sh.fs=Math.min(26,Math.max(12,(sh.fs||16)+2*+el.dataset.v));renderSheet()},
   musAdd(){const d=top().draft;d.musicians.push({role:ROLES_BAND.find(r=>!d.musicians.some(m=>m.role===r))||ROLES_BAND[0],memberId:""});renderSheet()},
@@ -571,7 +699,7 @@ const A={
     write(()=>S.db.collection("songs").doc(sh.id||newId()).set(data),"Canción guardada")},
   saveMember(){const sh=top(),d=sh.draft;if(!d.name.trim()){toast("Escribe el nombre");return}
     const data=clean({...d,name:d.name.trim(),note:d.note.trim()});
-    write(()=>S.db.collection("members").doc(sh.id||newId()).set(data),"Integrante guardado")},
+    write(()=>S.db.collection("members").doc(sh.id||newId()).set(data,{merge:true}),"Integrante guardado")},
   auth(){if(S.user)firebase.auth().signOut();else firebase.auth().signInWithPopup(new firebase.auth.GoogleAuthProvider()).catch(e=>{if(e.code!=="auth/popup-closed-by-user")toast("No se pudo iniciar sesión: "+(e.code||""))})},
   async seed(el){el.disabled=true;try{const b=S.db.batch();for(const col of ["members","songs","services"])for(const [id,v] of Object.entries(SEED[col]||{}))b.set(S.db.collection(col).doc(id),v);await b.commit();toast("Datos cargados")}catch(e){el.disabled=false;toast("No se pudieron cargar los datos")}},
   delService(){del("services","Servicio eliminado",2)},
@@ -589,9 +717,20 @@ document.addEventListener("input",e=>{
   const sh=top();if(!sh||!sh.draft)return;const d=sh.draft;
   if(t.dataset.f){d[t.dataset.f]=t.value;return}
 });
+/* planificar: controles de la vista principal */
+document.addEventListener("change",e=>{
+  const t=e.target,P=S.plan,ds=t.dataset||{};
+  if(ds.plan==="ym"){if(/^\d{4}-\d{2}$/.test(t.value)){P.ym=t.value;render()}}
+  else if(ds.plan==="overwrite"){P.overwrite=t.checked}
+  else if(ds.planVoices){P.voices[ds.planVoices]=Math.max(0,Math.min(8,+t.value||0))}
+  else if(ds.planNote){const m=S.members[ds.planNote];if(m&&(mMonth(m,P.ym).note||"")!==t.value.trim())memberUpd(ds.planNote,[FP("months",P.ym,"note"),t.value.trim()],"Nota guardada")}
+  else if(ds.propMus){const [i,j]=ds.propMus.split(",").map(Number);P.prop.items[i].musicians[j].memberId=t.value;render()}
+  else if(ds.propSing){const [i,j]=ds.propSing.split(",").map(Number);P.prop.items[i].singers[j]=t.value;render()}
+});
 document.addEventListener("change",e=>{
   const t=e.target,sh=top();if(!sh||!sh.draft)return;const d=sh.draft;
-  if(t.dataset.singer){const id=t.dataset.singer;d.singers=t.checked?[...new Set([...d.singers,id])]:d.singers.filter(x=>x!==id);if(d.songs.length)renderSheet()}
+  if(t.dataset.mtype){const v=t.dataset.mtype;d.types=PLAN_SHORTS.filter(x=>x===v?t.checked:d.types.includes(x))}
+  else if(t.dataset.singer){const id=t.dataset.singer;d.singers=t.checked?[...new Set([...d.singers,id])]:d.singers.filter(x=>x!==id);if(d.songs.length)renderSheet()}
   else if(t.dataset.role){const r=t.dataset.role;d.roles=t.checked?[...new Set([...d.roles,r])]:d.roles.filter(x=>x!==r)}
   else if(t.dataset.musRole!==undefined){d.musicians[+t.dataset.musRole].role=t.value;renderSheet()}
   else if(t.dataset.musMember!==undefined){d.musicians[+t.dataset.musMember].memberId=t.value}
