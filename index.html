@@ -238,6 +238,8 @@ function shiftKey(k,st){const p=keyParts(k);if(!p)return k;const flatsPref=FLAT_
 function showKey(k){if(!k)return "—";const p=keyParts(k);if(!p)return k;let r=p.root;if(S.notation==="la")r=latin(r);return r+(p.minor?"m":"")}
 /* tono guardado de una persona para una canción (o el original) */
 function keyFor(songId,singer){const s=S.songs[songId];if(!s)return "G";return (singer&&s.keys&&s.keys[singer])||s.key||"G"}
+/* tono con el que se canta en un servicio: manda el tono guardado de la persona, salvo un cambio "solo para este culto" */
+function svcKey(x){const saved=x.singer&&S.songs[x.songId]?.keys?.[x.singer];return (!x.custom&&saved)||x.key||S.songs[x.songId]?.key||"G"}
 function renderChart(body,st,targetKey){
   const flats=FLAT_KEYS.has(targetKey);
   return (body||"").split("\n").map(raw=>{
@@ -355,7 +357,7 @@ function sheetService(sh){
   const mus=(s.musicians||[]).filter(m=>m.role);
   b+='<div class="block"><h4>Banda</h4>'+(mus.length?mus.map(m=>'<div class="band-row"><span>'+esc(m.role)+'</span><span>'+esc(m.memberId?mName(m.memberId):"Sin asignar")+'</span></div>').join(""):'<span class="meta">Nadie asignado todavía</span>')+'</div>';
   const songs=(s.songs||[]).filter(x=>S.songs[x.songId]);
-  b+='<div class="block"><h4>Repertorio</h4>'+(songs.length?'<ol class="reper">'+songs.map(x=>'<li><button data-act="openSong" data-id="'+x.songId+'" data-key="'+esc(x.key||"")+'"><span class="grow">'+esc(S.songs[x.songId].title)+(x.singer?' <span class="singer-tag">· '+esc(mName(x.singer))+'</span>':'')+'</span><span class="key">'+esc(showKey(x.key||S.songs[x.songId].key))+'</span></button></li>').join("")+'</ol>':'<span class="meta">Sin canciones elegidas</span>')+'</div>';
+  b+='<div class="block"><h4>Repertorio</h4>'+(songs.length?'<ol class="reper">'+songs.map(x=>'<li><button data-act="openSong" data-id="'+x.songId+'" data-key="'+esc(svcKey(x))+'" data-singer="'+esc(x.singer||"")+'"><span class="grow">'+esc(S.songs[x.songId].title)+(x.singer?' <span class="singer-tag">· '+esc(mName(x.singer))+'</span>':'')+'</span><span class="key">'+esc(showKey(svcKey(x)))+'</span></button></li>').join("")+'</ol>':'<span class="meta">Sin canciones elegidas</span>')+'</div>';
   if(s.notes)b+='<div class="block"><h4>Notas</h4><div style="white-space:pre-wrap">'+esc(s.notes)+'</div></div>';
   return [s.type||"Servicio",right,b];
 }
@@ -365,6 +367,7 @@ function sheetSong(sh){
   const target=sh.key||s.key;const st=diff(s.key,target);
   const rel=((st+6)%12)-6;
   let b='<div><div class="meta">'+esc(s.author||"Autor sin registrar")+(s.bpm?" · "+esc(s.bpm)+" BPM":"")+' · Tono original <span class="key">'+esc(showKey(s.key))+'</span></div></div>';
+  if(sh.singer)b+='<div class="meta">Canta <strong>'+esc(mName(sh.singer))+'</strong>'+(s.keys&&s.keys[sh.singer]===target?' · en su tono':'')+'</div>';
   const pk=Object.entries(s.keys||{}).filter(([id,k])=>k).sort((a,b)=>mName(a[0]).localeCompare(mName(b[0]),"es"));
   if(pk.length)b+='<div class="keys-list"><span class="meta">Tonos:</span>'+pk.map(([id,k])=>'<button data-act="trTo" data-v="'+esc(k)+'" aria-pressed="'+(k===target)+'">'+esc(mName(id))+' <span class="key">'+esc(showKey(k))+'</span></button>').join("")+'</div>';
   b+='<div class="tools"><div class="transpose" aria-label="Transponer"><button class="mini" data-act="tr" data-v="-1" aria-label="Bajar medio tono">−</button><span class="now">'+esc(showKey(target))+(rel?' <small>('+(rel>0?"+":"")+rel+')</small>':"")+'</span><button class="mini" data-act="tr" data-v="1" aria-label="Subir medio tono">+</button>'+(st?'<button class="mini" data-act="tr" data-v="0">Original</button>':"")+'</div>'+
@@ -462,9 +465,9 @@ const A={
     else push({type:"memberEdit",id:null,draft:{name:"",roles:[],note:"",unavailable:[]}});
   },
   openService(el){push({type:"service",id:el.dataset.id})},
-  openSong(el){push({type:"song",id:el.dataset.id,key:el.dataset.key||S.songs[el.dataset.id]?.key,fs:16})},
+  openSong(el){push({type:"song",id:el.dataset.id,key:el.dataset.key||S.songs[el.dataset.id]?.key,singer:el.dataset.singer||"",fs:16})},
   editService(el){const s=S.services[el.dataset.id];const d=clean({date:s.date||"",time:s.time||"",type:s.type||"",leader:s.leader||"",singers:s.singers||[],musicians:s.musicians||[],songs:s.songs||[],notes:s.notes||""});
-    d.songs.forEach(x=>{if(x.singer===undefined)x.singer=d.leader||"";if(!x.key)x.key=keyFor(x.songId,x.singer);x.remember=true});
+    d.songs.forEach(x=>{if(x.singer===undefined)x.singer=d.leader||"";x.key=svcKey(x);x.remember=!x.custom;delete x.custom});
     push({type:"serviceEdit",id:el.dataset.id,draft:d})},
   editSong(el){const s=S.songs[el.dataset.id];push({type:"songEdit",id:el.dataset.id,draft:clean({title:s.title||"",author:s.author||"",key:s.key||"G",bpm:s.bpm||"",body:s.body||"",keys:Object.entries(s.keys||{}).map(([memberId,key])=>({memberId,key}))})})},
   trTo(el){const sh=top();sh.key=el.dataset.v;renderSheet()},
@@ -481,7 +484,7 @@ const A={
   songDel(el){top().draft.songs.splice(+el.dataset.i,1);renderSheet()},
   songUp(el){const d=top().draft,i=+el.dataset.i;if(i>0){[d.songs[i-1],d.songs[i]]=[d.songs[i],d.songs[i-1]];renderSheet()}},
   saveService(){const sh=top(),d=sh.draft;if(!d.date){toast("Elige una fecha");return}
-    const data=clean({...d,type:d.type.trim()||"Servicio",musicians:d.musicians.filter(m=>m.role),songs:d.songs.map(x=>({songId:x.songId,key:x.key,singer:x.singer||""})),updatedAt:new Date().toISOString()});
+    const data=clean({...d,type:d.type.trim()||"Servicio",musicians:d.musicians.filter(m=>m.role),songs:d.songs.map(x=>{const o={songId:x.songId,key:x.key,singer:x.singer||""};if(x.singer&&x.remember===false&&x.key!==keyFor(x.songId,x.singer))o.custom=true;return o}),updatedAt:new Date().toISOString()});
     const learn={};for(const x of d.songs)if(x.singer&&x.remember!==false&&x.key&&S.songs[x.songId]&&S.songs[x.songId].keys?.[x.singer]!==x.key)(learn[x.songId]=learn[x.songId]||{})["keys."+x.singer]=x.key;
     const n=Object.keys(learn).length;
     write(()=>{const b=S.db.batch();b.set(S.db.collection("services").doc(sh.id||newId()),data);for(const [id,u] of Object.entries(learn))b.update(S.db.collection("songs").doc(id),u);return b.commit()},n?"Servicio guardado · tonos recordados":"Servicio guardado")},
