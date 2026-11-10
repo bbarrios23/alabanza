@@ -143,8 +143,9 @@ ol.reper .grow{flex:1;min-width:0;font-weight:600}
 .chord-pop .sugg{display:flex;flex-wrap:wrap;gap:6px}
 .chord-pop .sugg button{font-family:var(--f-mono);font-weight:700;color:var(--chord);background:var(--accent-soft);border:0;border-radius:8px;padding:6px 10px}
 .chord-pop .row{display:flex;gap:8px;flex-wrap:wrap}
-.plan-month{display:flex;align-items:center;gap:10px}
-.plan-month input{padding:9px 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+.plan-month{display:flex;align-items:center;gap:8px}
+.plan-month select{padding:9px 10px;border:1px solid var(--line);border-radius:10px;background:var(--surface);min-width:0}
+.plan-month select:first-of-type{flex:1}
 .plan-block{display:flex;flex-direction:column;gap:10px;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px}
 .plan-block h3{margin:0;font-family:var(--f-display);font-weight:400;font-size:1.15rem}
 .plan-block .hint{margin:0}
@@ -440,7 +441,12 @@ function planDates(ym){
 function planPeople(){return sorted(S.members,(a,b)=>(a.name||"").localeCompare(b.name||"","es")).filter(m=>isVoice(m)||(m.roles||[]).some(r=>PLAN.some(p=>p.slots.includes(r))))}
 function viewPlan(){
   const P=S.plan,ym=P.ym,dates=planDates(ym),days=[...new Set(dates.map(d=>d.date))];
-  let h='<p class="section-label">Planificar mes</p><div class="plan-month"><label for="plan-ym" class="meta">Mes</label><input type="month" id="plan-ym" data-plan="ym" value="'+esc(ym)+'"></div>';
+  const [yy,mo]=ym.split("-").map(Number),cy=new Date().getFullYear();
+  const years=[];for(let y=Math.min(cy-1,yy);y<=Math.max(cy+5,yy);y++)years.push(y);
+  let h='<p class="section-label">Planificar mes</p><div class="plan-month"><button class="mini" data-act="planMonth" data-v="-1" aria-label="Mes anterior">◀</button>'+
+    '<select data-plan="mo" aria-label="Mes">'+MONTHS_L.map((n,i)=>'<option value="'+(i+1)+'"'+(i+1===mo?" selected":"")+'>'+n[0].toUpperCase()+n.slice(1)+'</option>').join("")+'</select>'+
+    '<select data-plan="yr" aria-label="Año">'+years.map(y=>'<option'+(y===yy?" selected":"")+'>'+y+'</option>').join("")+'</select>'+
+    '<button class="mini" data-act="planMonth" data-v="1" aria-label="Mes siguiente">▶</button></div>';
   h+='<div class="plan-block"><h3>1. Novedades de '+esc(ymLabel(ym))+'</h3><p class="hint">Marca en qué cultos sirve cada persona este mes, los días que no puede y cualquier nota. Se guarda al tocar.</p><div class="list">';
   for(const m of planPeople()){
     const mm=mMonth(m,ym),out=!!mm.out,types=mTypes(m,ym);
@@ -645,6 +651,7 @@ const A={
   planOff(el){const id=el.dataset.id,d=el.dataset.v,F=firebase.firestore.FieldValue;memberUpd(id,["unavailable",isOff(id,d)?F.arrayRemove(d):F.arrayUnion(d)])},
   planGen(){planGenerate();render();const p=$(".plan-block:last-of-type");if(p)p.scrollIntoView({behavior:"smooth",block:"start"})},
   planDiscard(){S.plan.prop=null;render()},
+  planMonth(el){const [y,m]=S.plan.ym.split("-").map(Number);const d=new Date(y,m-1+(+el.dataset.v),1);S.plan.ym=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0");render()},
   async planSave(){const pr=S.plan.prop;if(!pr||pr.busy)return;pr.busy=true;render();
     try{const b=S.db.batch(),now=new Date().toISOString();
       for(const it of pr.items){const ex=S.services[it.id]||{};const p=PLAN.find(x=>x.short===it.short);
@@ -720,7 +727,7 @@ document.addEventListener("input",e=>{
 /* planificar: controles de la vista principal */
 document.addEventListener("change",e=>{
   const t=e.target,P=S.plan,ds=t.dataset||{};
-  if(ds.plan==="ym"){if(/^\d{4}-\d{2}$/.test(t.value)){P.ym=t.value;render()}}
+  if(ds.plan==="mo"||ds.plan==="yr"){const [y,m]=P.ym.split("-");P.ym=(ds.plan==="yr"?t.value:y)+"-"+(ds.plan==="mo"?String(t.value).padStart(2,"0"):m);render()}
   else if(ds.plan==="overwrite"){P.overwrite=t.checked}
   else if(ds.planVoices){P.voices[ds.planVoices]=Math.max(0,Math.min(8,+t.value||0))}
   else if(ds.planNote){const m=S.members[ds.planNote];if(m&&(mMonth(m,P.ym).note||"")!==t.value.trim())memberUpd(ds.planNote,[FP("months",P.ym,"note"),t.value.trim()],"Nota guardada")}
